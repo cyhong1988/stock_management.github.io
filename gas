@@ -1,0 +1,16 @@
+function doPost(e) {
+  var params = JSON.parse(e.postData.contents);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  
+  // 按照標題順序寫入資料
+  sheet.appendRow([
+    params.buyDate,
+    params.sellDate,
+    params.name,
+    params.net,
+    params.pct
+  ]);
+  
+  return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
