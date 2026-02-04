@@ -1,8 +1,7 @@
+// 寫入資料 (點擊新增時觸發)
 function doPost(e) {
   var params = JSON.parse(e.postData.contents);
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  
-  // 按照標題順序寫入資料
   sheet.appendRow([
     params.buyDate,
     params.sellDate,
@@ -10,7 +9,27 @@ function doPost(e) {
     params.net,
     params.pct
   ]);
-  
   return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// 讀取資料 (網頁開啟時自動載入)
+function doGet() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  var rows = [];
+  
+  // 從第 2 行開始抓 (跳過標題)
+  for (var i = 1; i < data.length; i++) {
+    rows.push({
+      buyDate: data[i][0],
+      sellDate: data[i][1],
+      name: data[i][2],
+      net: data[i][3],
+      pct: data[i][4]
+    });
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify(rows))
     .setMimeType(ContentService.MimeType.JSON);
 }
