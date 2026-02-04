@@ -113,26 +113,24 @@
 </div>
 
 <script>
-// 請在此處貼上你的 Google Apps Script URL
 const GAS_URL = "https://script.google.com/macros/s/AKfycbw5EnCPe3vXFgl4RKud7YwTRuyyKy4oSc4vWXLes-EmSA-LTo--gyaDf8OfCNkqZRitlA/exec";
-
 let records = [];
 
-// --- 1. 自動載入雲端紀錄 ---
 window.onload = async function() {
     if (GAS_URL.includes("YOUR_GAS_URL")) return;
-    
     const status = document.getElementById('syncStatus');
     status.innerText = "正在從雲端同步歷史紀錄...";
-    
     try {
         const response = await fetch(GAS_URL);
         const history = await response.json();
-        
         if (history && history.length > 0) {
-            // 將雲端抓回來的陣列轉換為本地顯示格式
             records = history.map(item => {
                 const sDate = String(item.sellDate || "");
+                // 處理百分比格式化
+                let rawPct = item.pct ? String(item.pct) : "0";
+                if (!rawPct.includes('%')) {
+                    rawPct = (parseFloat(rawPct) * 100).toFixed(1) + "%";
+                }
                 return {
                     id: Date.now() + Math.random(),
                     bD: String(item.buyDate || "").substring(5, 10) || '--',
@@ -141,40 +139,22 @@ window.onload = async function() {
                     name: item.name,
                     qty: item.quantity || 1000,
                     net: parseFloat(item.net) || 0,
-                    pct: item.pct || "0%"
+                    pct: rawPct
                 };
-            }).reverse(); // 讓最新的在上面
-            
+            }).reverse();
             updateUI();
             status.innerText = "✅ 同步完成";
-        } else {
-            status.innerText = "☁️ 雲端目前無紀錄";
         }
     } catch (e) {
-        console.error("載入失敗:", e);
-        status.innerText = "⚠️ 無法讀取雲端資料 (請確認 GAS 已發布)";
+        status.innerText = "⚠️ 無法讀取雲端資料";
     }
 };
-
-// --- 2. 原有的邏輯保持不變 (smartJump, calculate, addRow, deleteRow, updateUI) ---
-
-function smartJump(targetId) {
-    const currentVal = document.getElementById('buyDate').value;
-    const nextEl = document.getElementById(targetId);
-    if (currentVal) {
-        setTimeout(() => {
-            nextEl.focus();
-            if (nextEl.showPicker) nextEl.showPicker();
-        }, 100);
-    }
-}
 
 function calculate() {
     const bp = parseFloat(document.getElementById('buyPrice').value);
     const sp = parseFloat(document.getElementById('sellPrice').value);
     const tr = parseFloat(document.getElementById('taxRate').value);
     const qty = parseFloat(document.getElementById('quantity').value) || 0;
-
     if (bp && sp && qty > 0) {
         const feeR = 0.001425 * 0.25;
         const bFee = Math.max(20, Math.floor(bp * qty * feeR));
@@ -182,8 +162,6 @@ function calculate() {
         const tax = Math.floor(sp * qty * tr);
         const net = (sp * qty) - (bp * qty) - bFee - sFee - tax;
         document.getElementById('profitVal').value = Math.round(net).toLocaleString();
-    } else {
-        document.getElementById('profitVal').value = "";
     }
 }
 
@@ -195,63 +173,29 @@ async function addRow() {
     const bD = document.getElementById('buyDate').value;
     const sD = document.getElementById('sellDate').value;
 
-    if(!name || isNaN(bp) || isNaN(sp) || isNaN(qty)) return alert("請完整填寫資訊");
+    if(!name || isNaN(bp) || isNaN(sp)) return alert("請填寫資訊");
 
-    const btn = document.getElementById('submitBtn');
-    const status = document.getElementById('syncStatus');
-    
     const tr = parseFloat(document.getElementById('taxRate').value);
     const feeR = 0.001425 * 0.25;
     const bFee = Math.max(20, Math.floor(bp * qty * feeR));
     const sFee = Math.max(20, Math.floor(sp * qty * feeR));
     const tax = Math.floor(sp * qty * tr);
     const net = (sp * qty) - (bp * qty) - bFee - sFee - tax;
+    // 這裡確保存入時就是帶有 % 的字串
     const pct = (net / (bp * qty + bFee) * 100).toFixed(1) + "%";
 
-    const newRecord = {
-        buyDate: bD,
-        sellDate: sD,
-        name: name,
-        quantity: qty,
-        net: Math.round(net),
-        pct: pct
-    };
+    const newRecord = { buyDate: bD, sellDate: sD, name: name, quantity: qty, net: Math.round(net), pct: pct };
 
-    // 儲存到雲端
-    btn.disabled = true;
-    status.innerText = "正在儲存到雲端...";
     try {
-        await fetch(GAS_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newRecord)
-        });
-        status.innerText = "✅ 儲存成功！";
-    } catch (e) {
-        status.innerText = "❌ 儲存失敗。";
-    }
-    btn.disabled = false;
+        fetch(GAS_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(newRecord) });
+    } catch (e) {}
 
-    // 本地即時更新
     records.unshift({
         id: Date.now(),
-        bD: bD.substring(5) || '--',
-        sD: sD.substring(5) || '--',
-        year: sD.split('-')[0] || '未分類',
-        name, qty, net, pct
+        bD: bD.substring(5), sD: sD.substring(5),
+        year: sD.split('-')[0], name, qty, net, pct
     });
-
     updateUI();
-    ['stockName','buyPrice','sellPrice','profitVal'].forEach(id => document.getElementById(id).value = "");
-    document.getElementById('quantity').value = 1000;
-}
-
-function deleteRow(id) {
-    if(confirm("確定刪除？(注意：這不會刪除 Google Sheets 上的紀錄)")) {
-        records = records.filter(r => r.id !== id);
-        updateUI();
-    }
 }
 
 function updateUI() {
@@ -267,7 +211,7 @@ function updateUI() {
                 <td><strong>${r.name}</strong></td>
                 <td>${r.qty}</td>
                 <td class="${up?'profit-up':'profit-down'}">${up?'+':''}${Math.round(r.net).toLocaleString()}</td>
-                <td class="${up?'profit-up':'profit-down'}">${r.pct}</td>
+                <td class="${up?'profit-up':'profit-down'}">${up && !r.pct.includes('+') ? '+' : ''}${r.pct}</td>
                 <td><button class="del-icon" onclick="deleteRow(${r.id})">✕</button></td>
             </tr>
         `;
@@ -280,6 +224,7 @@ function updateUI() {
         sumSection.innerHTML += `<div class="summary-card"><h4>${y} 年損益</h4><div class="amount" style="color:${val>=0?'#ff7675':'#55efc4'}">${val>=0?'+':''}${Math.round(val).toLocaleString()}</div></div>`;
     });
 }
+
 
 </script>
 </body>
