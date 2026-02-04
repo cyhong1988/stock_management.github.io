@@ -1,19 +1,28 @@
-// 寫入資料 (點擊新增時觸發)
+// 1. 處理寫入資料 (POST)
 function doPost(e) {
-  var params = JSON.parse(e.postData.contents);
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  sheet.appendRow([
-    params.buyDate,
-    params.sellDate,
-    params.name,
-    params.net,
-    params.pct
-  ]);
-  return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
-    .setMimeType(ContentService.MimeType.JSON);
+  try {
+    var params = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // 按照試算表欄位順序寫入：買進, 賣出, 名稱, 股數, 淨損益, 報酬率
+    sheet.appendRow([
+      params.buyDate,
+      params.sellDate,
+      params.name,
+      params.quantity, // 新增股數欄位
+      params.net,
+      params.pct
+    ]);
+    
+    return ContentService.createTextOutput(JSON.stringify({"result": "success"}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({"result": "error", "message": err.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
-// 讀取資料 (網頁開啟時自動載入)
+// 2. 處理讀取資料 (GET) - 若未來需要自動載入歷史紀錄
 function doGet() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
@@ -25,8 +34,9 @@ function doGet() {
       buyDate: data[i][0],
       sellDate: data[i][1],
       name: data[i][2],
-      net: data[i][3],
-      pct: data[i][4]
+      quantity: data[i][3], // 新增股數
+      net: data[i][4],
+      pct: data[i][5]
     });
   }
   
