@@ -1,1 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票損益管理系統</title>
+    <style>
+        :root { --up-color: #eb4d4b; --down-color: #6ab04c; --primary-bg: #f4f7f6; }
+        body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--primary-bg); padding: 10px; color: #333; margin: 0; }
+        .container { max-width: 700px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        
+        /* 基礎樣式維持 v13 優點 */
+        .summary-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .summary-card { flex: 1 1 120px; background: #2f3640; color: white; padding: 8px; border-radius: 6px; text-align: center; }
+        .summary-card h4 { margin: 0; font-size: 0.7rem; opacity: 0.7; }
+        .summary-card .amount { font-size: 1rem; font-weight: bold; margin-top: 2px; }
+
+        .input-section { display: flex; flex-direction: column; gap: 10px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
+        .row { display: flex; gap: 10px; }
+        .field { flex: 1; display: flex; flex-direction: column; }
+        .field label { font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; color: #4a5568; }
+        .field-full { width: 100%; margin-bottom: 2px; }
+        
+        input, select { padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 1rem; width: 100%; box-sizing: border-box; }
+        input[readonly] { background: #edf2f7; font-weight: bold; border: 1px dashed #a0aec0; }
+        
+        .btn-add { background: #3182ce; color: white; font-weight: bold; height: 45px; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; margin-top: 5px; }
+        .btn-add:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* 同步狀態提示 */
+        #syncStatus { font-size: 0.75rem; text-align: center; margin-top: 5px; color: #718096; }
+
+        .table-wrapper { width: 100%; border-top: 1px solid #edf2f7; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { padding: 10px 2px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; }
+        th { color: #718096; border-bottom: 2px solid #edf2f7; background: #fafafa; }
+        td { border-bottom: 1px solid #f7fafc; }
+        
+        .w-date { width: 13%; }
+        .w-name { width: 20%; }
+        .w-profit { width: 31%; }
+        .w-pct { width: 16%; }
+        .w-del { width: 8%; }
+
+        .profit-up { color: var(--up-color); font-weight: bold; }
+        .profit-down { color: var(--down-color); font-weight: bold; }
+        .del-icon { color: #cbd5e0; cursor: pointer; border: none; background: none; font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h3 style="text-align:center; margin: 0 0 15px 0;">📈 股票損益管理系統</h3>
+
+    <div id="summarySection" class="summary-wrapper"></div>
+    
+    <div class="input-section">
+        <div class="field field-full">
+            <label>買進日期</label>
+            <input type="date" id="buyDate" onblur="smartJump('sellDate')">
+        </div>
+        <div class="field field-full">
+            <label>賣出日期</label>
+            <input type="date" id="sellDate">
+        </div>
+
+        <div class="row">
+            <div class="field"><label>股票名稱</label><input type="text" id="stockName"></div>
+            <div class="field">
+                <label>稅率</label>
+                <select id="taxRate" onchange="calculate()">
+                    <option value="0.003">3‰ (一般)</option>
+                    <option value="0.001">1‰ (當沖/ETF)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="field"><label>買進單價</label><input type="number" id="buyPrice" step="0.01" oninput="calculate()"></div>
+            <div class="field"><label>賣出單價</label><input type="number" id="sellPrice" step="0.01" oninput="calculate()"></div>
+        </div>
+
+        <div class="field">
+            <label>預估淨損益</label>
+            <input type="text" id="profitVal" readonly>
+        </div>
+
+        <button class="btn-add" id="submitBtn" onclick="addRow()">新增並更新</button>
+        <div id="syncStatus"></div>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th class="w-date">買</th>
+                    <th class="w-date">賣</th>
+                    <th class="w-name">股票</th>
+                    <th class="w-profit">淨損益</th>
+                    <th class="w-pct">報酬</th>
+                    <th class="w-del"></th>
+                </tr>
+            </thead>
+            <tbody id="stockTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 請在此處貼上你的 Google Apps Script URL
+    const GAS_URL = "YOUR_GAS_URL_HERE";
+
+    let records = [];
+
+    function smartJump(targetId) {
+        const currentVal = document.getElementById('buyDate').value;
+        const nextEl = document.getElementById(targetId);
+        if (currentVal && currentVal.length > 0) {
+            setTimeout(() => {
+                nextEl.focus();
+                if (nextEl.showPicker) nextEl.showPicker();
+            }, 100);
+        }
+    }
+
+    function calculate() {
+        const bp = parseFloat(document.getElementById('buyPrice').value);
+        const sp = parseFloat(document.getElementById('sellPrice').value);
+        const tr = parseFloat(document.getElementById('taxRate').value);
+        if (bp && sp) {
+            const qty = 1000, feeR = 0.001425 * 0.25;
+            const bFee = Math.max(20, Math.floor(bp * qty * feeR));
+            const sFee = Math.max(20, Math.floor(sp * qty * feeR));
+            const tax = Math.floor(sp * qty * tr);
+            const net = (sp * qty) - (bp * qty) - bFee - sFee - tax;
+            document.getElementById('profitVal').value = Math.round(net).toLocaleString();
+        } else {
+            document.getElementById('profitVal').value = "";
+        }
+    }
+
+    async function addRow() {
+        const name = document.getElementById('stockName').value;
+        const bp = parseFloat(document.getElementById('buyPrice').value);
+        const sp = parseFloat(document.getElementById('sellPrice').value);
+        const bD = document.getElementById('buyDate').value;
+        const sD = document.getElementById('sellDate').value;
+        const profit = document.getElementById('profitVal').value;
+
+        if(!name || isNaN(bp) || isNaN(sp)) return alert("請填寫完整資訊");
+
+        const btn = document.getElementById('submitBtn');
+        const status = document.getElementById('syncStatus');
+        
+        // 準備本地顯示資料
+        const tr = parseFloat(document.getElementById('taxRate').value);
+        const qty = 1000, feeR = 0.001425 * 0.25;
+        const bFee = Math.max(20, Math.floor(bp * qty * feeR));
+        const sFee = Math.max(20, Math.floor(sp * qty * feeR));
+        const tax = Math.floor(sp * qty * tr);
+        const net = (sp * qty) - (bp * qty) - bFee - sFee - tax;
+        const pct = (net / (bp * qty + bFee) * 100).toFixed(1) + "%";
+
+        const newRecord = {
+            buyDate: bD,
+            sellDate: sD,
+            name: name,
+            net: Math.round(net),
+            pct: pct
+        };
+
+        // 1. 同步到 Google Sheets
+        if (GAS_URL === "YOUR_GAS_URL_HERE") {
+            alert("請先在代碼中設定 GAS_URL 才能同步雲端！");
+        } else {
+            btn.disabled = true;
+            status.innerText = "正在同步至 Google Sheets...";
+            
+            try {
+                await fetch(GAS_URL, {
+                    method: "POST",
+                    mode: "no-cors", // GAS 跨網域限制
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(newRecord)
+                });
+                status.innerText = "✅ 同步成功！";
+            } catch (e) {
+                console.error(e);
+                status.innerText = "❌ 同步失敗，僅儲存於本地。";
+            }
+            btn.disabled = false;
+        }
+
+        // 2. 更新本地 UI
+        records.unshift({
+            id: Date.now(),
+            bD: bD.substring(5) || '--',
+            sD: sD.substring(5) || '--',
+            year: sD.split('-')[0] || '未分類',
+            name, net, pct
+        });
+
+        updateUI();
+        ['stockName','buyPrice','sellPrice','profitVal'].forEach(id => document.getElementById(id).value = "");
+    }
+
+    function deleteRow(id) {
+        if(confirm("確定刪除？(注意：這不會刪除 Google Sheets 上的紀錄)")) {
+            records = records.filter(r => r.id !== id);
+            updateUI();
+        }
+    }
+
+    function updateUI() {
+        const tbody = document.getElementById('stockTableBody');
+        tbody.innerHTML = '';
+        const stats = {};
+        records.forEach(r => {
+            const up = r.net >= 0;
+            tbody.innerHTML += `
+                <tr>
+                    <td>${r.bD}</td>
+                    <td>${r.sD}</td>
+                    <td><strong>${r.name}</strong></td>
+                    <td class="${up?'profit-up':'profit-down'}">${up?'+':''}${Math.round(r.net).toLocaleString()}</td>
+                    <td class="${up?'profit-up':'profit-down'}">${r.pct}</td>
+                    <td><button class="del-icon" onclick="deleteRow(${r.id})">✕</button></td>
+                </tr>
+            `;
+            stats[r.year] = (stats[r.year] || 0) + r.net;
+        });
+        const sumSection = document.getElementById('summarySection');
+        sumSection.innerHTML = '';
+        Object.keys(stats).sort().reverse().forEach(y => {
+            const val = stats[y];
+            sumSection.innerHTML += `<div class="summary-card"><h4>${y} 年損益</h4><div class="amount" style="color:${val>=0?'#ff7675':'#55efc4'}">${val>=0?'+':''}${Math.round(val).toLocaleString()}</div></div>`;
+        });
+    }
+</script>
+</body>
+</html>
 
