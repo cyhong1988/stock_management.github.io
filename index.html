@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票損益管理系統</title>
+    <title>股票損益管理系統 v16</title>
     <style>
         :root { --up-color: #eb4d4b; --down-color: #6ab04c; --primary-bg: #f4f7f6; }
         body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--primary-bg); padding: 10px; color: #333; margin: 0; }
         .container { max-width: 700px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         
-        /* 基礎樣式維持 v13 優點 */
         .summary-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
         .summary-card { flex: 1 1 120px; background: #2f3640; color: white; padding: 8px; border-radius: 6px; text-align: center; }
         .summary-card h4 { margin: 0; font-size: 0.7rem; opacity: 0.7; }
@@ -27,24 +26,25 @@
         .btn-add { background: #3182ce; color: white; font-weight: bold; height: 45px; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; margin-top: 5px; }
         .btn-add:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* 同步狀態提示 */
         #syncStatus { font-size: 0.75rem; text-align: center; margin-top: 5px; color: #718096; }
 
         .table-wrapper { width: 100%; border-top: 1px solid #edf2f7; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { padding: 10px 2px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; }
+        th, td { padding: 10px 2px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.82rem; }
         th { color: #718096; border-bottom: 2px solid #edf2f7; background: #fafafa; }
         td { border-bottom: 1px solid #f7fafc; }
         
-        .w-date { width: 13%; }
-        .w-name { width: 20%; }
-        .w-profit { width: 31%; }
-        .w-pct { width: 16%; }
-        .w-del { width: 8%; }
+        /* 欄位分配 */
+        .w-date { width: 12%; }
+        .w-name { width: 18%; }
+        .w-qty { width: 12%; }
+        .w-profit { width: 28%; }
+        .w-pct { width: 12%; }
+        .w-del { width: 6%; }
 
         .profit-up { color: var(--up-color); font-weight: bold; }
         .profit-down { color: var(--down-color); font-weight: bold; }
-        .del-icon { color: #cbd5e0; cursor: pointer; border: none; background: none; font-size: 1.1rem; }
+        .del-icon { color: #cbd5e0; cursor: pointer; border: none; background: none; font-size: 1rem; }
     </style>
 </head>
 <body>
@@ -69,7 +69,7 @@
             <div class="field">
                 <label>稅率</label>
                 <select id="taxRate" onchange="calculate()">
-                    <option value="0.003">3‰ (一般)</option>
+                    <option value="0.003">3‰ (一般股票)</option>
                     <option value="0.001">1‰ (當沖/ETF)</option>
                 </select>
             </div>
@@ -81,7 +81,12 @@
         </div>
 
         <div class="field">
-            <label>預估淨損益</label>
+            <label>股數</label>
+            <input type="number" id="quantity" value="1000" step="1" oninput="calculate()">
+        </div>
+
+        <div class="field">
+            <label>預估總淨損益 (扣除稅費)</label>
             <input type="text" id="profitVal" readonly>
         </div>
 
@@ -96,6 +101,7 @@
                     <th class="w-date">買</th>
                     <th class="w-date">賣</th>
                     <th class="w-name">股票</th>
+                    <th class="w-qty">股數</th>
                     <th class="w-profit">淨損益</th>
                     <th class="w-pct">報酬</th>
                     <th class="w-del"></th>
@@ -108,14 +114,14 @@
 
 <script>
     // 請在此處貼上你的 Google Apps Script URL
-    const GAS_URL = "YOUR_GAS_URL_HERE";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbw5EnCPe3vXFgl4RKud7YwTRuyyKy4oSc4vWXLes-EmSA-LTo--gyaDf8OfCNkqZRitlA/exec";
 
     let records = [];
 
     function smartJump(targetId) {
         const currentVal = document.getElementById('buyDate').value;
         const nextEl = document.getElementById(targetId);
-        if (currentVal && currentVal.length > 0) {
+        if (currentVal) {
             setTimeout(() => {
                 nextEl.focus();
                 if (nextEl.showPicker) nextEl.showPicker();
@@ -127,8 +133,10 @@
         const bp = parseFloat(document.getElementById('buyPrice').value);
         const sp = parseFloat(document.getElementById('sellPrice').value);
         const tr = parseFloat(document.getElementById('taxRate').value);
-        if (bp && sp) {
-            const qty = 1000, feeR = 0.001425 * 0.25;
+        const qty = parseFloat(document.getElementById('quantity').value) || 0;
+
+        if (bp && sp && qty > 0) {
+            const feeR = 0.001425 * 0.25; // 假設手續費 2.5 折
             const bFee = Math.max(20, Math.floor(bp * qty * feeR));
             const sFee = Math.max(20, Math.floor(sp * qty * feeR));
             const tax = Math.floor(sp * qty * tr);
@@ -143,18 +151,17 @@
         const name = document.getElementById('stockName').value;
         const bp = parseFloat(document.getElementById('buyPrice').value);
         const sp = parseFloat(document.getElementById('sellPrice').value);
+        const qty = parseFloat(document.getElementById('quantity').value);
         const bD = document.getElementById('buyDate').value;
         const sD = document.getElementById('sellDate').value;
-        const profit = document.getElementById('profitVal').value;
 
-        if(!name || isNaN(bp) || isNaN(sp)) return alert("請填寫完整資訊");
+        if(!name || isNaN(bp) || isNaN(sp) || isNaN(qty)) return alert("請完整填寫資訊");
 
         const btn = document.getElementById('submitBtn');
         const status = document.getElementById('syncStatus');
         
-        // 準備本地顯示資料
         const tr = parseFloat(document.getElementById('taxRate').value);
-        const qty = 1000, feeR = 0.001425 * 0.25;
+        const feeR = 0.001425 * 0.25;
         const bFee = Math.max(20, Math.floor(bp * qty * feeR));
         const sFee = Math.max(20, Math.floor(sp * qty * feeR));
         const tax = Math.floor(sp * qty * tr);
@@ -165,47 +172,43 @@
             buyDate: bD,
             sellDate: sD,
             name: name,
+            quantity: qty,
             net: Math.round(net),
             pct: pct
         };
 
-        // 1. 同步到 Google Sheets
-        if (GAS_URL === "https://script.google.com/macros/s/AKfycbw5EnCPe3vXFgl4RKud7YwTRuyyKy4oSc4vWXLes-EmSA-LTo--gyaDf8OfCNkqZRitlA/exec") {
-            alert("請先在代碼中設定 GAS_URL 才能同步雲端！");
-        } else {
+        if (GAS_URL !== "YOUR_GAS_URL_HERE") {
             btn.disabled = true;
-            status.innerText = "正在同步至 Google Sheets...";
-            
+            status.innerText = "同步至 Google Sheets...";
             try {
                 await fetch(GAS_URL, {
                     method: "POST",
-                    mode: "no-cors", // GAS 跨網域限制
+                    mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(newRecord)
                 });
                 status.innerText = "✅ 同步成功！";
             } catch (e) {
-                console.error(e);
-                status.innerText = "❌ 同步失敗，僅儲存於本地。";
+                status.innerText = "❌ 同步失敗。";
             }
             btn.disabled = false;
         }
 
-        // 2. 更新本地 UI
         records.unshift({
             id: Date.now(),
             bD: bD.substring(5) || '--',
             sD: sD.substring(5) || '--',
             year: sD.split('-')[0] || '未分類',
-            name, net, pct
+            name, qty, net, pct
         });
 
         updateUI();
         ['stockName','buyPrice','sellPrice','profitVal'].forEach(id => document.getElementById(id).value = "");
+        document.getElementById('quantity').value = 1000;
     }
 
     function deleteRow(id) {
-        if(confirm("確定刪除？(注意：這不會刪除 Google Sheets 上的紀錄)")) {
+        if(confirm("確定刪除？")) {
             records = records.filter(r => r.id !== id);
             updateUI();
         }
@@ -222,6 +225,7 @@
                     <td>${r.bD}</td>
                     <td>${r.sD}</td>
                     <td><strong>${r.name}</strong></td>
+                    <td>${r.qty}</td>
                     <td class="${up?'profit-up':'profit-down'}">${up?'+':''}${Math.round(r.net).toLocaleString()}</td>
                     <td class="${up?'profit-up':'profit-down'}">${r.pct}</td>
                     <td><button class="del-icon" onclick="deleteRow(${r.id})">✕</button></td>
@@ -239,4 +243,3 @@
 </script>
 </body>
 </html>
-
