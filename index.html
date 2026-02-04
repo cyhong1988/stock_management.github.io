@@ -126,7 +126,6 @@ window.onload = async function() {
         if (history && history.length > 0) {
             records = history.map(item => {
                 const sDate = String(item.sellDate || "");
-                // 處理百分比格式化
                 let rawPct = item.pct ? String(item.pct) : "0";
                 if (!rawPct.includes('%')) {
                     rawPct = (parseFloat(rawPct) * 100).toFixed(1) + "%";
@@ -149,6 +148,21 @@ window.onload = async function() {
         status.innerText = "⚠️ 無法讀取雲端資料";
     }
 };
+
+// 補上的 smartJump
+function smartJump(targetId) {
+    const buyDateEl = document.getElementById('buyDate');
+    const sellDateEl = document.getElementById('sellDate');
+    const currentVal = buyDateEl.value;
+    if (currentVal) {
+        if (!sellDateEl.value) sellDateEl.value = currentVal;
+        const nextEl = document.getElementById(targetId);
+        setTimeout(() => {
+            nextEl.focus();
+            if (nextEl.showPicker) nextEl.showPicker();
+        }, 100);
+    }
+}
 
 function calculate() {
     const bp = parseFloat(document.getElementById('buyPrice').value);
@@ -181,7 +195,6 @@ async function addRow() {
     const sFee = Math.max(20, Math.floor(sp * qty * feeR));
     const tax = Math.floor(sp * qty * tr);
     const net = (sp * qty) - (bp * qty) - bFee - sFee - tax;
-    // 這裡確保存入時就是帶有 % 的字串
     const pct = (net / (bp * qty + bFee) * 100).toFixed(1) + "%";
 
     const newRecord = { buyDate: bD, sellDate: sD, name: name, quantity: qty, net: Math.round(net), pct: pct };
@@ -196,6 +209,16 @@ async function addRow() {
         year: sD.split('-')[0], name, qty, net, pct
     });
     updateUI();
+    ['stockName','buyPrice','sellPrice','profitVal'].forEach(id => document.getElementById(id).value = "");
+    document.getElementById('quantity').value = 1000;
+}
+
+// 補上的 deleteRow
+function deleteRow(id) {
+    if(confirm("確定刪除？")) {
+        records = records.filter(r => r.id !== id);
+        updateUI();
+    }
 }
 
 function updateUI() {
@@ -224,8 +247,7 @@ function updateUI() {
         sumSection.innerHTML += `<div class="summary-card"><h4>${y} 年損益</h4><div class="amount" style="color:${val>=0?'#ff7675':'#55efc4'}">${val>=0?'+':''}${Math.round(val).toLocaleString()}</div></div>`;
     });
 }
-
-
 </script>
+
 </body>
 </html>
