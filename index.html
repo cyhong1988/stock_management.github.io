@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票損益管理系統 v17</title>
+    <title>股票損益管理系統 v17.2</title>
     <style>
         :root { --up-color: #eb4d4b; --down-color: #6ab04c; --primary-bg: #f4f7f6; }
         body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--primary-bg); padding: 10px; color: #333; margin: 0; }
@@ -23,8 +23,7 @@
         input[readonly] { background: #edf2f7; font-weight: bold; border: 1px dashed #a0aec0; }
         
         .btn-add { background: #3182ce; color: white; font-weight: bold; height: 45px; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; margin-top: 5px; }
-        .btn-add:disabled { background: #ccc; cursor: not-allowed; }
-
+        
         #syncStatus { font-size: 0.75rem; text-align: center; margin-top: 5px; color: #718096; }
 
         .table-wrapper { width: 100%; border-top: 1px solid #edf2f7; overflow-x: auto; }
@@ -33,13 +32,25 @@
         th { color: #718096; border-bottom: 2px solid #edf2f7; background: #fafafa; }
         td { border-bottom: 1px solid #f7fafc; vertical-align: middle; }
         
-        /* 欄位寬度微調 */
         .w-date { width: 14%; }
-        .w-info { width: 30%; } /* 股票+價格 */
+        .w-info { width: 30%; } 
         .w-qty { width: 12%; }
         .w-profit { width: 22%; }
         .w-pct { width: 15%; }
         .w-del { width: 7%; }
+
+        /* 當沖標籤樣式 */
+        .day-trade-badge {
+            background: #f1c40f;
+            color: #000;
+            font-size: 0.6rem;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-left: 3px;
+            display: inline-block;
+            vertical-align: middle;
+        }
 
         .price-sub { font-size: 0.7rem; color: #a0aec0; display: block; margin-top: 2px; }
         .profit-up { color: var(--up-color); font-weight: bold; }
@@ -65,8 +76,9 @@
             <div class="field">
                 <label>稅率</label>
                 <select id="taxRate" onchange="calculate()">
-                    <option value="0.003">3‰ (一般)</option>
-                    <option value="0.001">1‰ (當沖/ETF)</option>
+                    <option value="0.003">3‰ (一般股票)</option>
+                    <option value="0.0015">1.5‰ (當沖)</option>
+                    <option value="0.001">1‰ (ETF)</option>
                 </select>
             </div>
         </div>
@@ -129,8 +141,8 @@ window.onload = async function() {
                     sD: sDate.substring(5, 10) || '--',
                     year: sDate.substring(0, 4) || '未分類',
                     name: item.name,
-                    bp: item.buyPrice || 0, // 新增
-                    sp: item.sellPrice || 0, // 新增
+                    bp: item.buyPrice || 0,
+                    sp: item.sellPrice || 0,
                     qty: item.quantity || 1000,
                     net: parseFloat(item.net) || 0,
                     pct: rawPct
@@ -190,7 +202,6 @@ async function addRow() {
     const net = (sp * qty) - (bp * qty) - bFee - sFee - tax;
     const pct = (net / (bp * qty + bFee) * 100).toFixed(1) + "%";
 
-    // 同步到 GAS 時也傳送 bp 和 sp
     const newRecord = { 
         buyDate: bD, sellDate: sD, name: name, quantity: qty, 
         net: Math.round(net), pct: pct, buyPrice: bp, sellPrice: sp 
@@ -223,11 +234,14 @@ function updateUI() {
     const stats = {};
     records.forEach(r => {
         const up = r.net >= 0;
+        // 判斷是否為當沖 (買賣日期字串相同)
+        const isDayTrade = r.bD === r.sD;
+        
         tbody.innerHTML += `
             <tr>
                 <td>${r.bD}<br>${r.sD}</td>
                 <td>
-                    <strong>${r.name}</strong>
+                    <strong>${r.name}</strong>${isDayTrade ? '<span class="day-trade-badge">當沖</span>' : ''}
                     <span class="price-sub">${r.bp} → ${r.sp}</span>
                 </td>
                 <td>${r.qty}</td>
