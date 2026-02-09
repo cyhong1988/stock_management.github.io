@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票損益管理系統 v17.2</title>
+    <title>股票損益管理系統 v17.3</title>
     <style>
         :root { --up-color: #eb4d4b; --down-color: #6ab04c; --primary-bg: #f4f7f6; }
         body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--primary-bg); padding: 10px; color: #333; margin: 0; }
@@ -26,6 +26,14 @@
         
         #syncStatus { font-size: 0.75rem; text-align: center; margin-top: 5px; color: #718096; }
 
+        /* 年份標籤樣式 */
+        .year-filter-wrapper { display: flex; gap: 8px; margin: 15px 0 10px 0; overflow-x: auto; padding-bottom: 5px; }
+        .year-tab { 
+            padding: 6px 15px; background: #edf2f7; border-radius: 20px; font-size: 0.85rem; 
+            cursor: pointer; white-space: nowrap; color: #4a5568; border: 1px solid transparent; transition: 0.2s;
+        }
+        .year-tab.active { background: #3182ce; color: white; font-weight: bold; }
+
         .table-wrapper { width: 100%; border-top: 1px solid #edf2f7; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 340px; }
         th, td { padding: 10px 2px; text-align: center; font-size: 0.82rem; }
@@ -39,17 +47,9 @@
         .w-pct { width: 15%; }
         .w-del { width: 7%; }
 
-        /* 當沖標籤樣式 */
         .day-trade-badge {
-            background: #f1c40f;
-            color: #000;
-            font-size: 0.6rem;
-            padding: 1px 4px;
-            border-radius: 3px;
-            font-weight: bold;
-            margin-left: 3px;
-            display: inline-block;
-            vertical-align: middle;
+            background: #f1c40f; color: #000; font-size: 0.6rem; padding: 1px 4px;
+            border-radius: 3px; font-weight: bold; margin-left: 3px; display: inline-block; vertical-align: middle;
         }
 
         .price-sub { font-size: 0.7rem; color: #a0aec0; display: block; margin-top: 2px; }
@@ -102,6 +102,8 @@
         <div id="syncStatus"></div>
     </div>
 
+    <div id="yearTabs" class="year-filter-wrapper"></div>
+
     <div class="table-wrapper">
         <table>
             <thead>
@@ -122,6 +124,7 @@
 <script>
 const GAS_URL = "https://script.google.com/macros/s/AKfycbw5EnCPe3vXFgl4RKud7YwTRuyyKy4oSc4vWXLes-EmSA-LTo--gyaDf8OfCNkqZRitlA/exec";
 let records = [];
+let currentFilterYear = '全部';
 
 window.onload = async function() {
     if (GAS_URL.includes("YOUR_GAS_URL")) return;
@@ -228,13 +231,27 @@ function deleteRow(id) {
     }
 }
 
+function setYearFilter(year) {
+    currentFilterYear = year;
+    updateUI();
+}
+
 function updateUI() {
     const tbody = document.getElementById('stockTableBody');
+    const tabContainer = document.getElementById('yearTabs');
     tbody.innerHTML = '';
+    
     const stats = {};
+    const yearsSet = new Set(['全部']);
+
     records.forEach(r => {
+        stats[r.year] = (stats[r.year] || 0) + r.net;
+        yearsSet.add(r.year);
+
+        // 過濾年份
+        if (currentFilterYear !== '全部' && r.year !== currentFilterYear) return;
+
         const up = r.net >= 0;
-        // 判斷是否為當沖 (買賣日期字串相同)
         const isDayTrade = r.bD === r.sD;
         
         tbody.innerHTML += `
@@ -250,13 +267,21 @@ function updateUI() {
                 <td><button class="del-icon" onclick="deleteRow(${r.id})">✕</button></td>
             </tr>
         `;
-        stats[r.year] = (stats[r.year] || 0) + r.net;
     });
+
+    // 更新上方年度統計卡片
     const sumSection = document.getElementById('summarySection');
     sumSection.innerHTML = '';
     Object.keys(stats).sort().reverse().forEach(y => {
         const val = stats[y];
         sumSection.innerHTML += `<div class="summary-card"><h4>${y} 年損益</h4><div class="amount" style="color:${val>=0?'#ff7675':'#55efc4'}">${val>=0?'+':''}${Math.round(val).toLocaleString()}</div></div>`;
+    });
+
+    // 更新紀錄區年份標籤
+    tabContainer.innerHTML = '';
+    Array.from(yearsSet).sort((a,b) => b.localeCompare(a)).forEach(y => {
+        const isActive = y === currentFilterYear ? 'active' : '';
+        tabContainer.innerHTML += `<div class="year-tab ${isActive}" onclick="setYearFilter('${y}')">${y}</div>`;
     });
 }
 </script>
