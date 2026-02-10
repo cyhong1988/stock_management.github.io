@@ -224,12 +224,44 @@ async function addRow() {
     document.getElementById('quantity').value = 1000;
 }
 
-function deleteRow(id) {
-    if(confirm("確定刪除？")) {
-        records = records.filter(r => r.id !== id);
+async function deleteRow(id) {
+    if(!confirm("確定要永久刪除此筆雲端紀錄嗎？")) return;
+
+    // 1. 找到本地資料中對應的那一筆
+    const recordToDelete = records.find(r => String(r.id) === String(id));
+    if (!recordToDelete) return;
+
+    const status = document.getElementById('syncStatus');
+    status.innerText = "⏳ 正在同步刪除至雲端...";
+
+    // 2. 準備傳送給 GAS 的資料
+    const deleteParams = {
+        action: "delete",
+        name: recordToDelete.name,
+        net: Math.round(recordToDelete.net) // 傳送整數損益以便比對
+    };
+
+    try {
+        // 使用 POST 發送刪除請求
+        await fetch(GAS_URL, {
+            method: "POST",
+            mode: "no-cors",
+            body: JSON.stringify(deleteParams)
+        });
+
+        // 3. 雲端指令發出後，更新網頁 UI
+        records = records.filter(r => String(r.id) !== String(id));
         updateUI();
+        
+        status.innerText = "✅ 雲端資料已成功刪除";
+        setTimeout(() => status.innerText = "", 3000);
+    } catch (e) {
+        status.innerText = "❌ 刪除失敗，請檢查網路";
+        console.error(e);
     }
 }
+
+
 
 function setYearFilter(year) {
     currentFilterYear = year;
