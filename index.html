@@ -225,14 +225,14 @@ async function addRow() {
 }
 
 async function deleteRow(id) {
-    if(!confirm("確定要永久刪除此筆雲端紀錄嗎？")) return;
+    if(!confirm("確定要永久刪除嗎？")) return;
 
     // 1. 找到本地資料中對應的那一筆
     const recordToDelete = records.find(r => String(r.id) === String(id));
     if (!recordToDelete) return;
 
     const status = document.getElementById('syncStatus');
-    status.innerText = "⏳ 正在同步刪除至雲端...";
+    status.innerText = "⏳ 刪除中...";
 
     // 2. 準備傳送給 GAS 的資料
     const deleteParams = {
@@ -253,7 +253,7 @@ async function deleteRow(id) {
         records = records.filter(r => String(r.id) !== String(id));
         updateUI();
         
-        status.innerText = "✅ 雲端資料已成功刪除";
+        status.innerText = "✅ 已成功刪除";
         setTimeout(() => status.innerText = "", 3000);
     } catch (e) {
         status.innerText = "❌ 刪除失敗，請檢查網路";
