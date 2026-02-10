@@ -6,24 +6,31 @@ function doPost(e) {
   // 刪除邏輯
   if (data.action === "delete") {
     var rows = sheet.getDataRange().getValues();
-    // 從最後一行往回找 (避免刪除後索引跑掉)
+    // 從最後一行往回找
     for (var i = rows.length - 1; i >= 1; i--) {
-      var rowName = String(rows[i][2]); // 假設第 3 欄是股票名稱
-      var rowNet = Math.round(rows[i][6]); // 假設第 7 欄是淨損益
+      var rowName = String(rows[i][2]); // 第三欄：股票名稱 (索引2)
+      var rowNet  = Math.round(rows[i][4]); // 第五欄：淨損益 (索引4)
       
-      // 同時比對名稱與金額，避免誤刪
+      // 比對名稱與淨損益
       if (rowName === String(data.name) && rowNet === Number(data.net)) {
         sheet.deleteRow(i + 1);
         return ContentService.createTextOutput("Delete Success");
       }
     }
+    return ContentService.createTextOutput("Not Found");
   } 
   
-  // 新增邏輯 (維持原樣)
+  // 新增邏輯：依照你要求的欄位順序排列
   else {
     sheet.appendRow([
-      data.buyDate, data.sellDate, data.name, data.buyPrice, 
-      data.sellPrice, data.quantity, data.net, data.pct
+      data.buyDate,   // 買進日期 [0]
+      data.sellDate,  // 賣出日期 [1]
+      data.name,      // 股票名稱 [2]
+      data.quantity,  // 股數 [3]
+      data.net,       // 淨損益 [4]
+      data.pct,       // 報酬率 [5]
+      data.buyPrice,  // 買進價 [6]
+      data.sellPrice  // 賣出價 [7]
     ]);
     return ContentService.createTextOutput("Add Success");
   }
