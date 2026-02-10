@@ -3,26 +3,28 @@ function doPost(e) {
   var sheet = ss.getSheets()[0];
   var data = JSON.parse(e.postData.contents);
   
-  // 如果是刪除指令
+  // 刪除邏輯
   if (data.action === "delete") {
     var rows = sheet.getDataRange().getValues();
-    // 從最後一行往回找，比對名稱、日期和損益
+    // 從最後一行往回找 (避免刪除後索引跑掉)
     for (var i = rows.length - 1; i >= 1; i--) {
-      // 這裡的比對條件可以根據你的試算表欄位調整 (例如 0是買入日期, 2是名稱)
-      if (rows[i][2] == data.name && rows[i][4] == data.quantity && rows[i][5] == data.net) {
+      var rowName = String(rows[i][2]); // 假設第 3 欄是股票名稱
+      var rowNet = Math.round(rows[i][6]); // 假設第 7 欄是淨損益
+      
+      // 同時比對名稱與金額，避免誤刪
+      if (rowName === String(data.name) && rowNet === Number(data.net)) {
         sheet.deleteRow(i + 1);
-        break; // 刪除一筆後停止
+        return ContentService.createTextOutput("Delete Success");
       }
     }
-    return ContentService.createTextOutput("Deleted");
   } 
   
-  // 原有的新增邏輯
+  // 新增邏輯 (維持原樣)
   else {
     sheet.appendRow([
       data.buyDate, data.sellDate, data.name, data.buyPrice, 
       data.sellPrice, data.quantity, data.net, data.pct
     ]);
-    return ContentService.createTextOutput("Success");
+    return ContentService.createTextOutput("Add Success");
   }
 }
