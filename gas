@@ -1,45 +1,28 @@
-// 1. 處理寫入資料 (POST)
 function doPost(e) {
-  try {
-    var params = JSON.parse(e.postData.contents);
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    
-    // 按照試算表欄位順序寫入：買進, 賣出, 名稱, 股數, 淨損益, 報酬率
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var data = JSON.parse(e.postData.contents);
+  
+  // 如果是刪除指令
+  if (data.action === "delete") {
+    var rows = sheet.getDataRange().getValues();
+    // 從最後一行往回找，比對名稱、日期和損益
+    for (var i = rows.length - 1; i >= 1; i--) {
+      // 這裡的比對條件可以根據你的試算表欄位調整 (例如 0是買入日期, 2是名稱)
+      if (rows[i][2] == data.name && rows[i][4] == data.quantity && rows[i][5] == data.net) {
+        sheet.deleteRow(i + 1);
+        break; // 刪除一筆後停止
+      }
+    }
+    return ContentService.createTextOutput("Deleted");
+  } 
+  
+  // 原有的新增邏輯
+  else {
     sheet.appendRow([
-      params.buyDate,
-      params.sellDate,
-      params.name,
-      params.quantity, // 新增股數欄位
-      params.net,
-      params.pct
+      data.buyDate, data.sellDate, data.name, data.buyPrice, 
+      data.sellPrice, data.quantity, data.net, data.pct
     ]);
-    
-    return ContentService.createTextOutput(JSON.stringify({"result": "success"}))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({"result": "error", "message": err.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput("Success");
   }
-}
-
-// 2. 處理讀取資料 (GET) - 若未來需要自動載入歷史紀錄
-function doGet() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = sheet.getDataRange().getValues();
-  var rows = [];
-  
-  // 從第 2 行開始抓 (跳過標題)
-  for (var i = 1; i < data.length; i++) {
-    rows.push({
-      buyDate: data[i][0],
-      sellDate: data[i][1],
-      name: data[i][2],
-      quantity: data[i][3], // 新增股數
-      net: data[i][4],
-      pct: data[i][5]
-    });
-  }
-  
-  return ContentService.createTextOutput(JSON.stringify(rows))
-    .setMimeType(ContentService.MimeType.JSON);
 }
