@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票損益管理系統 v17.3</title>
+    <title>股票損益管理系統 v17.4</title>
     <style>
-        :root { --up-color: #eb4d4b; --down-color: #6ab04c; --primary-bg: #f4f7f6; }
+        :root { --up-color: #eb4d4b; --down-color: #6ab04c; --primary-bg: #f4f7f6; --day-trade: #f1c40f; --next-day-trade: #3498db; }
         body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--primary-bg); padding: 10px; color: #333; margin: 0; }
         .container { max-width: 700px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         
@@ -26,7 +26,6 @@
         
         #syncStatus { font-size: 0.75rem; text-align: center; margin-top: 5px; color: #718096; }
 
-        /* 年份標籤樣式 */
         .year-filter-wrapper { display: flex; gap: 8px; margin: 15px 0 10px 0; overflow-x: auto; padding-bottom: 5px; }
         .year-tab { 
             padding: 6px 15px; background: #edf2f7; border-radius: 20px; font-size: 0.85rem; 
@@ -47,10 +46,13 @@
         .w-pct { width: 15%; }
         .w-del { width: 7%; }
 
-        .day-trade-badge {
-            background: #f1c40f; color: #000; font-size: 0.6rem; padding: 1px 4px;
-            border-radius: 3px; font-weight: bold; margin-left: 3px; display: inline-block; vertical-align: middle;
+        /* 標籤樣式 */
+        .badge {
+            font-size: 0.6rem; padding: 1px 4px; border-radius: 3px; 
+            font-weight: bold; margin-left: 3px; display: inline-block; vertical-align: middle;
         }
+        .day-trade-badge { background: var(--day-trade); color: #000; }
+        .next-day-badge { background: var(--next-day-trade); color: #fff; }
 
         .price-sub { font-size: 0.7rem; color: #a0aec0; display: block; margin-top: 2px; }
         .profit-up { color: var(--up-color); font-weight: bold; }
@@ -135,14 +137,18 @@ window.onload = async function() {
         const history = await response.json();
         if (history && history.length > 0) {
             records = history.map(item => {
-                const sDate = String(item.sellDate || "");
+                const sDateStr = String(item.sellDate || "");
+                const bDateStr = String(item.buyDate || "");
                 let rawPct = item.pct ? String(item.pct) : "0";
                 if (!rawPct.includes('%')) rawPct = (parseFloat(rawPct) * 100).toFixed(1) + "%";
+                
                 return {
                     id: Date.now() + Math.random(),
-                    bD: String(item.buyDate || "").substring(5, 10) || '--',
-                    sD: sDate.substring(5, 10) || '--',
-                    year: sDate.substring(0, 4) || '未分類',
+                    fullBD: bDateStr, // 保留完整日期計算用
+                    fullSD: sDateStr,
+                    bD: bDateStr.substring(5, 10) || '--',
+                    sD: sDateStr.substring(5, 10) || '--',
+                    year: sDateStr.substring(0, 4) || '未分類',
                     name: item.name,
                     bp: item.buyPrice || 0,
                     sp: item.sellPrice || 0,
@@ -216,6 +222,7 @@ async function addRow() {
 
     records.unshift({
         id: Date.now(),
+        fullBD: bD, fullSD: sD,
         bD: bD.substring(5), sD: sD.substring(5),
         year: sD.split('-')[0], name, bp, sp, qty, net, pct
     });
@@ -226,42 +233,21 @@ async function addRow() {
 
 async function deleteRow(id) {
     if(!confirm("確定要永久刪除嗎？")) return;
-
-    // 1. 找到本地資料中對應的那一筆
     const recordToDelete = records.find(r => String(r.id) === String(id));
     if (!recordToDelete) return;
-
     const status = document.getElementById('syncStatus');
     status.innerText = "⏳ 刪除中...";
-
-    // 2. 準備傳送給 GAS 的資料
-    const deleteParams = {
-        action: "delete",
-        name: recordToDelete.name,
-        net: Math.round(recordToDelete.net) // 傳送整數損益以便比對
-    };
-
+    const deleteParams = { action: "delete", name: recordToDelete.name, net: Math.round(recordToDelete.net) };
     try {
-        // 使用 POST 發送刪除請求
-        await fetch(GAS_URL, {
-            method: "POST",
-            mode: "no-cors",
-            body: JSON.stringify(deleteParams)
-        });
-
-        // 3. 雲端指令發出後，更新網頁 UI
+        await fetch(GAS_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(deleteParams) });
         records = records.filter(r => String(r.id) !== String(id));
         updateUI();
-        
         status.innerText = "✅ 已成功刪除";
         setTimeout(() => status.innerText = "", 3000);
     } catch (e) {
-        status.innerText = "❌ 刪除失敗，請檢查網路";
-        console.error(e);
+        status.innerText = "❌ 刪除失敗";
     }
 }
-
-
 
 function setYearFilter(year) {
     currentFilterYear = year;
@@ -272,25 +258,36 @@ function updateUI() {
     const tbody = document.getElementById('stockTableBody');
     const tabContainer = document.getElementById('yearTabs');
     tbody.innerHTML = '';
-    
     const stats = {};
     const yearsSet = new Set(['全部']);
 
     records.forEach(r => {
         stats[r.year] = (stats[r.year] || 0) + r.net;
         yearsSet.add(r.year);
-
-        // 過濾年份
         if (currentFilterYear !== '全部' && r.year !== currentFilterYear) return;
 
         const up = r.net >= 0;
-        const isDayTrade = r.bD === r.sD;
+        
+        // 判斷日期標籤邏輯
+        let badgeHtml = '';
+        if (r.fullBD && r.fullSD) {
+            const bDate = new Date(r.fullBD);
+            const sDate = new Date(r.fullSD);
+            const diffTime = sDate - bDate;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) {
+                badgeHtml = '<span class="badge day-trade-badge">當沖</span>';
+            } else if (diffDays === 1) {
+                badgeHtml = '<span class="badge next-day-badge">隔日沖</span>';
+            }
+        }
         
         tbody.innerHTML += `
             <tr>
                 <td>${r.bD}<br>${r.sD}</td>
                 <td>
-                    <strong>${r.name}</strong>${isDayTrade ? '<span class="day-trade-badge">當沖</span>' : ''}
+                    <strong>${r.name}</strong>${badgeHtml}
                     <span class="price-sub">${r.bp} → ${r.sp}</span>
                 </td>
                 <td>${r.qty}</td>
@@ -301,7 +298,6 @@ function updateUI() {
         `;
     });
 
-    // 更新上方年度統計卡片
     const sumSection = document.getElementById('summarySection');
     sumSection.innerHTML = '';
     Object.keys(stats).sort().reverse().forEach(y => {
@@ -309,7 +305,6 @@ function updateUI() {
         sumSection.innerHTML += `<div class="summary-card"><h4>${y} 年損益</h4><div class="amount" style="color:${val>=0?'#ff7675':'#55efc4'}">${val>=0?'+':''}${Math.round(val).toLocaleString()}</div></div>`;
     });
 
-    // 更新紀錄區年份標籤
     tabContainer.innerHTML = '';
     Array.from(yearsSet).sort((a,b) => b.localeCompare(a)).forEach(y => {
         const isActive = y === currentFilterYear ? 'active' : '';
