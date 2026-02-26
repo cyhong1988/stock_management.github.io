@@ -3,16 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票損益管理系統 v17.4</title>
+    <title>股票損益管理系統 v17.6</title>
     <style>
         :root { --up-color: #eb4d4b; --down-color: #6ab04c; --primary-bg: #f4f7f6; --day-trade: #f1c40f; --next-day-trade: #3498db; }
         body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--primary-bg); padding: 10px; color: #333; margin: 0; }
         .container { max-width: 700px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         
+        /* 統計卡片區域優化 */
         .summary-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
-        .summary-card { flex: 1 1 120px; background: #2f3640; color: white; padding: 8px; border-radius: 6px; text-align: center; }
-        .summary-card h4 { margin: 0; font-size: 0.7rem; opacity: 0.7; }
-        .summary-card .amount { font-size: 1rem; font-weight: bold; margin-top: 2px; }
+        .summary-card { flex: 1 1 120px; background: #2f3640; color: white; padding: 10px; border-radius: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .summary-card h4 { margin: 0; font-size: 0.7rem; opacity: 0.8; letter-spacing: 1px; }
+        .summary-card .amount { font-size: 1rem; font-weight: bold; margin-top: 4px; }
+        .card-large { flex: 1 1 100%; padding: 15px; }
+        .card-large .amount { font-size: 1.4rem; }
 
         .input-section { display: flex; flex-direction: column; gap: 10px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
         .row { display: flex; gap: 10px; }
@@ -26,12 +29,13 @@
         
         #syncStatus { font-size: 0.75rem; text-align: center; margin-top: 5px; color: #718096; }
 
-        .year-filter-wrapper { display: flex; gap: 8px; margin: 15px 0 10px 0; overflow-x: auto; padding-bottom: 5px; }
-        .year-tab { 
-            padding: 6px 15px; background: #edf2f7; border-radius: 20px; font-size: 0.85rem; 
-            cursor: pointer; white-space: nowrap; color: #4a5568; border: 1px solid transparent; transition: 0.2s;
-        }
-        .year-tab.active { background: #3182ce; color: white; font-weight: bold; }
+        .filter-container { margin: 15px 0; }
+        .filter-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+        .filter-row::-webkit-scrollbar { display: none; }
+        
+        .tab { padding: 5px 15px; background: #edf2f7; border-radius: 20px; font-size: 0.8rem; cursor: pointer; white-space: nowrap; color: #4a5568; border: 1px solid transparent; transition: 0.2s; }
+        .tab.active { background: #3182ce; color: white; font-weight: bold; }
+        .month-row { border-top: 1px solid #eee; padding-top: 8px; margin-top: 5px; }
 
         .table-wrapper { width: 100%; border-top: 1px solid #edf2f7; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 340px; }
@@ -46,11 +50,7 @@
         .w-pct { width: 15%; }
         .w-del { width: 7%; }
 
-        /* 標籤樣式 */
-        .badge {
-            font-size: 0.6rem; padding: 1px 4px; border-radius: 3px; 
-            font-weight: bold; margin-left: 3px; display: inline-block; vertical-align: middle;
-        }
+        .badge { font-size: 0.6rem; padding: 1px 4px; border-radius: 3px; font-weight: bold; margin-left: 3px; display: inline-block; vertical-align: middle; }
         .day-trade-badge { background: var(--day-trade); color: #000; }
         .next-day-badge { background: var(--next-day-trade); color: #fff; }
 
@@ -104,7 +104,10 @@
         <div id="syncStatus"></div>
     </div>
 
-    <div id="yearTabs" class="year-filter-wrapper"></div>
+    <div class="filter-container">
+        <div id="yearTabs" class="filter-row"></div>
+        <div id="monthTabs" class="filter-row month-row"></div>
+    </div>
 
     <div class="table-wrapper">
         <table>
@@ -127,6 +130,7 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbw5EnCPe3vXFgl4RKud7YwTRuyyKy4oSc4vWXLes-EmSA-LTo--gyaDf8OfCNkqZRitlA/exec";
 let records = [];
 let currentFilterYear = '全部';
+let currentFilterMonth = '全部';
 
 window.onload = async function() {
     if (GAS_URL.includes("YOUR_GAS_URL")) return;
@@ -144,11 +148,12 @@ window.onload = async function() {
                 
                 return {
                     id: Date.now() + Math.random(),
-                    fullBD: bDateStr, // 保留完整日期計算用
+                    fullBD: bDateStr,
                     fullSD: sDateStr,
                     bD: bDateStr.substring(5, 10) || '--',
                     sD: sDateStr.substring(5, 10) || '--',
                     year: sDateStr.substring(0, 4) || '未分類',
+                    month: sDateStr.substring(5, 7) || '--',
                     name: item.name,
                     bp: item.buyPrice || 0,
                     sp: item.sellPrice || 0,
@@ -172,8 +177,10 @@ function smartJump(targetId) {
         if (!sellDateEl.value) sellDateEl.value = buyDateEl.value;
         const nextEl = document.getElementById(targetId);
         setTimeout(() => {
-            nextEl.focus();
-            if (nextEl.showPicker) nextEl.showPicker();
+            if (nextEl) {
+                nextEl.focus();
+                if (nextEl.showPicker) nextEl.showPicker();
+            }
         }, 100);
     }
 }
@@ -224,7 +231,9 @@ async function addRow() {
         id: Date.now(),
         fullBD: bD, fullSD: sD,
         bD: bD.substring(5), sD: sD.substring(5),
-        year: sD.split('-')[0], name, bp, sp, qty, net, pct
+        year: sD.split('-')[0], 
+        month: sD.split('-')[1],
+        name, bp, sp, qty, net, pct
     });
     updateUI();
     ['stockName','buyPrice','sellPrice','profitVal'].forEach(id => document.getElementById(id).value = "");
@@ -251,65 +260,118 @@ async function deleteRow(id) {
 
 function setYearFilter(year) {
     currentFilterYear = year;
+    currentFilterMonth = '全部';
+    updateUI();
+}
+
+function setMonthFilter(month) {
+    currentFilterMonth = month;
     updateUI();
 }
 
 function updateUI() {
     const tbody = document.getElementById('stockTableBody');
-    const tabContainer = document.getElementById('yearTabs');
-    tbody.innerHTML = '';
-    const stats = {};
-    const yearsSet = new Set(['全部']);
-
-    records.forEach(r => {
-        stats[r.year] = (stats[r.year] || 0) + r.net;
-        yearsSet.add(r.year);
-        if (currentFilterYear !== '全部' && r.year !== currentFilterYear) return;
-
-        const up = r.net >= 0;
-        
-        // 判斷日期標籤邏輯
-        let badgeHtml = '';
-        if (r.fullBD && r.fullSD) {
-            const bDate = new Date(r.fullBD);
-            const sDate = new Date(r.fullSD);
-            const diffTime = sDate - bDate;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays === 0) {
-                badgeHtml = '<span class="badge day-trade-badge">當沖</span>';
-            } else if (diffDays === 1) {
-                badgeHtml = '<span class="badge next-day-badge">隔日沖</span>';
-            }
-        }
-        
-        tbody.innerHTML += `
-            <tr>
-                <td>${r.bD}<br>${r.sD}</td>
-                <td>
-                    <strong>${r.name}</strong>${badgeHtml}
-                    <span class="price-sub">${r.bp} → ${r.sp}</span>
-                </td>
-                <td>${r.qty}</td>
-                <td class="${up?'profit-up':'profit-down'}">${up?'+':''}${Math.round(r.net).toLocaleString()}</td>
-                <td class="${up?'profit-up':'profit-down'}">${up && !r.pct.includes('+') ? '+' : ''}${r.pct}</td>
-                <td><button class="del-icon" onclick="deleteRow(${r.id})">✕</button></td>
-            </tr>
-        `;
-    });
-
+    const yearTabContainer = document.getElementById('yearTabs');
+    const monthTabContainer = document.getElementById('monthTabs');
     const sumSection = document.getElementById('summarySection');
+    
+    tbody.innerHTML = '';
     sumSection.innerHTML = '';
-    Object.keys(stats).sort().reverse().forEach(y => {
-        const val = stats[y];
-        sumSection.innerHTML += `<div class="summary-card"><h4>${y} 年損益</h4><div class="amount" style="color:${val>=0?'#ff7675':'#55efc4'}">${val>=0?'+':''}${Math.round(val).toLocaleString()}</div></div>`;
+    
+    let filteredProfit = 0;
+    const yearsSet = new Set(['全部']);
+    const monthsSet = new Set(['全部']);
+    const yearStats = {}; // 用於儲存各年份的總額
+
+    // 1. 遍歷數據與計算統計
+    records.forEach(r => {
+        yearsSet.add(r.year);
+        
+        // 累計各年份獲利 (不論目前篩選為何，都要計算)
+        if (r.year !== '未分類') {
+            yearStats[r.year] = (yearStats[r.year] || 0) + r.net;
+        }
+
+        if (currentFilterYear === '全部' || r.year === currentFilterYear) {
+            if (r.month && r.month !== '--') monthsSet.add(r.month);
+        }
+
+        const matchYear = (currentFilterYear === '全部' || r.year === currentFilterYear);
+        const matchMonth = (currentFilterMonth === '全部' || r.month === currentFilterMonth);
+
+        if (matchYear && matchMonth) {
+            filteredProfit += r.net;
+            const up = r.net >= 0;
+            let badgeHtml = '';
+            if (r.fullBD && r.fullSD) {
+                const bDate = new Date(r.fullBD);
+                const sDate = new Date(r.fullSD);
+                const diffDays = Math.ceil((sDate - bDate) / (1000 * 60 * 60 * 24));
+                if (diffDays === 0) badgeHtml = '<span class="badge day-trade-badge">當沖</span>';
+                else if (diffDays === 1) badgeHtml = '<span class="badge next-day-badge">隔日沖</span>';
+            }
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td>${r.bD}<br>${r.sD}</td>
+                    <td>
+                        <strong>${r.name}</strong>${badgeHtml}
+                        <span class="price-sub">${r.bp} → ${r.sp}</span>
+                    </td>
+                    <td>${r.qty}</td>
+                    <td class="${up?'profit-up':'profit-down'}">${up?'+':''}${Math.round(r.net).toLocaleString()}</td>
+                    <td class="${up?'profit-up':'profit-down'}">${up && !r.pct.includes('+') ? '+' : ''}${r.pct}</td>
+                    <td><button class="del-icon" onclick="deleteRow(${r.id})">✕</button></td>
+                </tr>
+            `;
+        }
     });
 
-    tabContainer.innerHTML = '';
+    // 2. 更新上方統計卡片邏輯
+    if (currentFilterYear === '全部') {
+        // 「全部」模式：依照年份列出多個小卡片
+        const sortedYears = Object.keys(yearStats).sort((a,b) => b - a);
+        sortedYears.forEach(y => {
+            const val = yearStats[y];
+            sumSection.innerHTML += `
+                <div class="summary-card">
+                    <h4>${y} 年損益</h4>
+                    <div class="amount" style="color:${val>=0?'#ff7675':'#55efc4'}">
+                        ${val>=0?'+':''}${Math.round(val).toLocaleString()}
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        // 「特定篩選」模式：顯示一個大卡片
+        const title = currentFilterYear + '年' + (currentFilterMonth === '全部' ? '總損益' : ` ${parseInt(currentFilterMonth)}月損益`);
+        sumSection.innerHTML = `
+            <div class="summary-card card-large">
+                <h4>${title}</h4>
+                <div class="amount" style="color:${filteredProfit>=0?'#ff7675':'#55efc4'}">
+                    ${filteredProfit>=0?'+':''}${Math.round(filteredProfit).toLocaleString()}
+                </div>
+            </div>
+        `;
+    }
+
+    // 3. 更新頁籤 UI
+    yearTabContainer.innerHTML = '';
     Array.from(yearsSet).sort((a,b) => b.localeCompare(a)).forEach(y => {
         const isActive = y === currentFilterYear ? 'active' : '';
-        tabContainer.innerHTML += `<div class="year-tab ${isActive}" onclick="setYearFilter('${y}')">${y}</div>`;
+        yearTabContainer.innerHTML += `<div class="tab ${isActive}" onclick="setYearFilter('${y}')">${y}</div>`;
     });
+
+    monthTabContainer.innerHTML = '';
+    if (currentFilterYear !== '全部') {
+        Array.from(monthsSet).sort().forEach(m => {
+            const isActive = m === currentFilterMonth ? 'active' : '';
+            const label = m === '全部' ? '整年' : parseInt(m) + '月';
+            monthTabContainer.innerHTML += `<div class="tab ${isActive}" onclick="setMonthFilter('${m}')">${label}</div>`;
+        });
+    } else {
+        monthTabContainer.innerHTML = '<div style="font-size:0.75rem; color:#999; padding:5px;">選擇特定年份後可篩選月份</div>';
+    }
 }
 </script>
 </body>
