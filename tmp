@@ -1,0 +1,133 @@
+############################################################
+# Cell definition
+############################################################
+create_cell PAD_IO
+
+############################################################
+# PG pins
+############################################################
+add_pg_pin VDD
+add_pg_pin VDDPST
+add_pg_pin VSS
+
+############################################################
+# Signal pins
+############################################################
+add_pin PAD -direction inout
+add_pin I   -direction input
+add_pin OEN -direction input
+add_pin IE  -direction input
+add_pin PU  -direction input
+add_pin PD  -direction input
+add_pin DS  -direction input
+add_pin POC -direction input
+add_pin C   -direction output
+
+############################################################
+# Default constraints (避免不穩定狀態)
+############################################################
+set_case_analysis 1 VDD
+set_case_analysis 1 VDDPST
+set_case_analysis 0 POC
+
+############################################################
+# Illegal conditions（非常重要）
+############################################################
+# PU/PD 同時開 = short
+set_illegal_condition "PU == 1 && PD == 1"
+
+############################################################
+# Mode definitions（核心）
+############################################################
+
+# Output mode
+create_mode OUTPUT_MODE
+set_mode_condition OUTPUT_MODE "OEN == 0"
+
+# Input mode
+create_mode INPUT_MODE
+set_mode_condition INPUT_MODE "OEN == 1 && IE == 1"
+
+# High-Z mode（無弱拉）
+create_mode HIZ_MODE
+set_mode_condition HIZ_MODE "OEN == 1 && PU == 0 && PD == 0"
+
+# Pull-up mode
+create_mode PU_MODE
+set_mode_condition PU_MODE "OEN == 1 && PU == 1 && PD == 0"
+
+# Pull-down mode
+create_mode PD_MODE
+set_mode_condition PD_MODE "OEN == 1 && PU == 0 && PD == 1"
+
+############################################################
+# FUNCTION（這段是關鍵）
+############################################################
+
+# Output driver（PAD 被 I 驅動）
+add_function PAD "I" -when "OEN == 0"
+
+# Input buffer（C 讀 PAD）
+add_function C "PAD" -when "OEN == 1 && IE == 1"
+
+# IE=0 時 C 固定（避免 X）
+add_function C "0" -when "IE == 0"
+
+############################################################
+# TIMING ARC
+############################################################
+
+# Output arc
+define_arc \
+    -type combinational \
+    -from I \
+    -to PAD \
+    -when "OEN == 0"
+
+# Input arc
+define_arc \
+    -type combinational \
+    -from PAD \
+    -to C \
+    -when "OEN == 1 && IE == 1"
+
+############################################################
+# TRI-STATE（對 synthesis/STA 很重要）
+############################################################
+set_three_state PAD \
+    -enable "OEN == 0" \
+    -disable "OEN == 1"
+
+############################################################
+# WEAK PULL（只在 input mode）
+############################################################
+set_pull_up PAD \
+    -when "OEN == 1 && PU == 1 && PD == 0"
+
+set_pull_down PAD \
+    -when "OEN == 1 && PD == 1 && PU == 0"
+
+############################################################
+# TIMING SENSE
+############################################################
+set_timing_sense I PAD positive_unate
+set_timing_sense PAD C non_unate
+
+############################################################
+# DRIVE STRENGTH（可選，如果 DS 有意義）
+############################################################
+# create_mode DRV0
+# set_mode_condition DRV0 "DS == 0"
+#
+# create_mode DRV1
+# set_mode_condition DRV1 "DS == 1"
+
+############################################################
+# Z / X handling
+############################################################
+# SiliconSmart 不吃 X → 用 mode 避掉
+set_illegal_condition "OEN == 1 && IE == 1 && PAD == Z && PU == 0 && PD == 0"
+
+############################################################
+# End
+############################################################
