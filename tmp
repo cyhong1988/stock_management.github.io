@@ -1,9 +1,11 @@
-接下來，我們深入看 Global Attributes 如何影響最終的數據計算。
-在 .lib 檔案的最上方，會先定義一套 Base Units（基準單位），例如時間單位 1ns、電壓 1V 等。這些是後續所有數值的運算基礎，如果單位對不齊，後端工具的模擬結果就會出錯。
-但實際晶片運作時，環境是不斷變化的，這就是圖中中間層 Scaling 的作用。我們利用一系列以 k_ 開頭的係數（即 K-factors）來進行微調：
-1. Process Scaling (k_process_*)：補償製程變異（如 Fast/Slow corner）。
-2. Temperature Scaling (k_temp_*)：補償溫度變化，例如圖中顯示 cell_rise 會隨溫度以每度 0.000788ns 的比例變動。
-3. Voltage Scaling (k_voltage_*)：補償電壓波動對延遲的影響。
-核心邏輯是：
-EDA 工具會抓取 Global Attributes 的原始數值，乘上這些 k_factors 進行線性補償，最後推導出 Final Corner-Specific Values。
-透過這套補償機制，我們不需要為每一種細微的溫度或電壓組合都手寫一份表格，大幅精簡了 .lib 檔案的體積，同時保有模擬的精確度。
+在定義完環境屬性後，接下來是 .lib 檔案中最重要的數據結構：查表範本 (lu_table_template)。
+由於元件的延遲（Delay）和功耗（Power）並非線性變化的，我們無法用一個簡單的公式概括，因此必須透過「查表」來取得精確數值。
+這個範本（Template）的作用主要有三個：
+1. 定義自變數 (Variables)：
+通常我們會選取兩個關鍵變數，也就是圖中看到的 variable_1：input_net_transition（輸入信號斜率）和 variable_2：total_output_net_capacitance（輸出負載電容）。
+2. 設定座標軸 (Index Lists)：
+範本會預先定義好一組索引清單，例如圖中範例 comb_0 是一個 3 \times 3 的表格，它規定了當 Slew 是 0.01、0.1 或 0.3，以及 Load 為 0.001 到 0.05 時的座標點。
+3. 資源共享與精簡化：
+這是最關鍵的一點。一個範本可以被成千上萬個 Cell 同時引用。這不僅大幅減少了 .lib 檔案的體積，也讓維護變得更簡單——當我們需要調整整體的查表精度時，只需修改範本，而不需要去更動每個元件。
+小結一下：
+範本定義了「骨架」，而具體的 Cell 則填入對應的「數值」。透過這種方式，EDA 工具就能在這些座標點之間進行插值運算（Interpolation），推算出最接近真實物理情況的時序結果。
