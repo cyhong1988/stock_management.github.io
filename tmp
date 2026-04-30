@@ -1,13 +1,9 @@
-在了解 AIP 的整體架構後，我們進入細部的 Pin Structure。對於類比 IP 來說，腳位定義的核心不在於延遲查表，而在於「電氣特性」與「連結關係」。
-這張圖展示了幾個關鍵點：
-1. 類比電源定義 (pg_pin)：
-圖中可以看到 AVCCQ 與 AVCC 等腳位。這些標註明確區分了類比電路的電源供應，這對於大型 SoC 中的電源軌（Power Rail）規劃至關重要。
-2. 腳位屬性與連結 (Pin Attributes)：
-觀察右側的程式碼區塊，每個腳位（如 REG1A_STBY 或 PLL_OUT）都明確定義了：
-• direction：定義信號是 input 或 output。
-• capacitance：定義該腳位的負載電容數值。這讓數位前端工具在驅動類比 IP 時，能計算出正確的信號斜率（Transition）。
-• related_power_pin / related_ground_pin：這是 AIP 的精髓。它明確指出了該信號腳位是依附在特定的電源軌（如 REG1A_V09_OUT）之上。這對於偵測跨電壓域（Multi-voltage domain）的設計錯誤非常重要。
-3. 特殊功能宣告：
-以 PLL_OUT 為例，它特別標註了 clock : true。這告訴數位工具，雖然這是一個類比輸出的信號，但它必須被視為時脈源進行處理。
-總結來說：
-AIP 的 .lib 檔案就像是一份「通訊錄」與「電氣說明書」。它不負責描述類比內部的運作細節，但它確保了數位與類比這兩個截然不同的世界，在整合時能夠擁有正確的電源對接、電容負載計算與信號方向判斷。
+最後，我們來看 Example 5260: HDLY。Hard Delay 元件通常是具有固定延遲時間的硬核（Hard Macro），在 .lib 檔案的處理策略上與 AIP 非常接近。
+這張圖的重點在於其對「建模複雜度」的取捨：
+1. 省略細部模型：
+同樣地，我們在 cell 區塊中劃掉了 timing / power 和 internal pin。這代表我們不打算在 Liberty 檔案中透過複雜的查表（Lookup Table）來描述其內部的延遲變化，而是可能改用更直接的方式（如固定數值或反向標註）來處理。
+2. 保留物理與環境基礎：
+• Global Attributes：右側對話框顯示，它依然保留了 K-factors（如 k_temp_cell_rise）。這確保了當整個系統處於不同溫度或電壓環境時，這個 Hard Delay 的基本延遲數值仍能根據物理特性進行縮放（Scaling）。
+• 介面一致性：pg_pin 與 pin / bus 的定義被保留，確保 APR 工具在佈局佈線時，能正確處理其電源供電與信號連結。
+核心總結：
+對 HDLY 這種元件而言，.lib 的主要作用是提供一個「環境感知（Environment-aware）」的封裝殼。它告訴工具：這是一個具有特定腳位、需要供電，且會隨溫度變動物理特性的黑盒子。
