@@ -1,164 +1,45 @@
-########################################################################
-# IO PAD CHARACTERIZATION SETUP
-########################################################################
+add_table {
+    VDD VDDPST POC DS OEN I PU PD PAD IE : PAD C
+    # 1. OEN=0: 輸出模式 (PAD為輸出，輸入端的PAD填 -)
+    1   1      0   0   0   0  0  0  -   0  : 0   0
+    1   1      0   0   0   0  0  1  -   0  : 0   0
+    1   1      0   0   0   0  1  0  -   0  : 0   0
+    1   1      0   0   0   0  1  1  -   0  : 0   0
+    1   1      0   1   0   0  0  0  -   0  : 0   0
+    1   1      0   1   0   0  0  1  -   0  : 0   0
+    1   1      0   1   0   0  1  0  -   0  : 0   0
+    1   1      0   1   0   0  1  1  -   0  : 0   0
+    
+    1   1      0   0   0   1  0  0  -   1  : 1   1
+    1   1      0   0   0   1  0  1  -   1  : 1   1
+    1   1      0   0   0   1  1  0  -   1  : 1   1
+    1   1      0   0   0   1  1  1  -   1  : 1   1
+    1   1      0   1   0   1  0  0  -   1  : 1   1
+    1   1      0   1   0   1  0  1  -   1  : 1   1
+    1   1      0   1   0   1  1  0  -   1  : 1   1
+    1   1      0   1   0   1  1  1  -   1  : 1   1
 
-#
-# Pin directions
-#
+    1   1      0   0   0   1  0  0  -   0  : 1   0
+    1   1      0   0   0   1  0  1  -   0  : 1   0
+    1   1      0   0   0   1  1  0  -   0  : 1   0
+    1   1      0   0   0   1  1  1  -   0  : 1   0
+    1   1      0   1   0   1  0  0  -   0  : 1   0
+    1   1      0   1   0   1  0  1  -   0  : 1   0
+    1   1      0   1   0   1  1  0  -   0  : 1   0
+    1   1      0   1   0   1  1  1  -   0  : 1   0
 
-add_pin PAD -type inout
-add_pin I   -type input
-add_pin C   -type output
+    # 2. OEN=1: 輸入/上拉/下拉模式 (輸入端的PAD有特定值，輸出端的PAD填 -)
+    1   1      0   0/1 1   0/1 0/1 0/1 0   0/1 : -   0
+    1   1      0   0/1 1   0/1 0/1 0/1 1   1   : -   1
+    1   1      0   0/1 1   0/1 0   0/1 1   0   : -   0
+    1   1      0   0/1 1   0/1 0   0   Z   0   : -   0
+    1   1      0   0/1 1   0/1 0   0   Z   1   : -   X
+    1   1      0   0/1 1   0/1 0   1   Z   0   : L   0
+    1   1      0   0/1 1   0/1 0   1   Z   1   : L   0
+    1   1      0   0/1 1   0/1 1   0   Z   0   : H   0
+    1   1      0   0/1 1   0/1 1   0   Z   1   : H   1
 
-add_pin OEN -type input
-add_pin IE  -type input
-add_pin PU  -type input
-add_pin PD  -type input
-
-add_pin VDD    -type power
-add_pin VDDPST -type power
-add_pin POC    -type input
-
-########################################################################
-# FUNCTION DEFINITIONS
-########################################################################
-
-#
-# Receiver path
-#
-# IE=1 -> C follows PAD
-# IE=0 -> C forced low
-#
-
-add_function C {(IE & PAD)}
-
-#
-# Output driver path
-#
-# OEN=0 -> PAD driven by I
-# OEN=1 -> PAD high-Z
-#
-
-add_function PAD {I} -three_state {OEN}
-
-########################################################################
-# OPERATING MODES
-########################################################################
-
-#
-# Output mode
-#
-
-add_mode OUTPUT_MODE {
-    VDD==1 &&
-    VDDPST==1 &&
-    POC==0 &&
-    OEN==0
+    # 3. 特殊與電源異常狀態
+    1   0      0   0/1 0/1 0/1 0/1 0/1 0/1 0/1 : X   0
+    0   1      1   -   -   -   -   -   -   -   : Z   X
 }
-
-#
-# Input mode
-#
-
-add_mode INPUT_MODE {
-    VDD==1 &&
-    VDDPST==1 &&
-    POC==0 &&
-    OEN==1 &&
-    IE==1
-}
-
-#
-# Weak pull-up mode
-#
-
-add_mode PULLUP_MODE {
-    VDD==1 &&
-    VDDPST==1 &&
-    POC==0 &&
-    OEN==1 &&
-    PU==1 &&
-    PD==0
-}
-
-#
-# Weak pull-down mode
-#
-
-add_mode PULLDOWN_MODE {
-    VDD==1 &&
-    VDDPST==1 &&
-    POC==0 &&
-    OEN==1 &&
-    PU==0 &&
-    PD==1
-}
-
-#
-# Hi-Z mode
-#
-
-add_mode HIZ_MODE {
-    VDD==1 &&
-    VDDPST==1 &&
-    POC==0 &&
-    OEN==1 &&
-    PU==0 &&
-    PD==0
-}
-
-########################################################################
-# ILLEGAL STATE FILTERING
-########################################################################
-
-#
-# Prevent illegal pull combinations
-#
-
-add_constraint {
-    !(PU==1 && PD==1)
-}
-
-#
-# Prevent characterization during invalid power state
-#
-
-add_constraint {
-    !(VDD==0 && VDDPST==0)
-}
-
-########################################################################
-# TIMING ARC PARTITION
-########################################################################
-
-#
-# Output timing arc
-#
-
-define_arc \
-    -from I \
-    -to PAD \
-    -when "OEN==0"
-
-#
-# Input timing arc
-#
-
-define_arc \
-    -from PAD \
-    -to C \
-    -when "IE==1 && OEN==1"
-
-########################################################################
-# THREE STATE CHARACTERIZATION
-########################################################################
-
-define_arc \
-    -from OEN \
-    -to PAD \
-    -type three_state_disable
-
-define_arc \
-    -from OEN \
-    -to PAD \
-    -type three_state_enable
