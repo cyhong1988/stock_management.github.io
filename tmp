@@ -1,10 +1,164 @@
-在看過了從基礎架構、環境補償係數，到各種類型 IP（如 OTP, AIP, MEM）的實例後，我們可以用這三點來總結今天的報告：
-1. 設計的單一真理來源 (Single Source of Truth)：
-Liberty 檔案是 ASIC 設計流程中，關於時序（Timing）、功耗（Power）與物理數據（Physical data）的權威來源。無論是前端的合成還是後端的實體設計與簽核，都仰賴這份檔案來確保設計的正確性。
-2. 層次化語法帶來的效率：
-我們看到透過 library → type → cell → pin 這種階層化的結構，搭配「查表範本（Lookup-table templates）」與「Bus 定義」，.lib 檔案能以最精簡、可重用的方式，描述極其複雜的電路行為。
-3. 實務應用的靈活性：
-透過對 NAND-Flash 控制器、匯流排類型以及可程式化延遲元件（HDLY）的觀察，我們了解到 Scaling Factors（K-factors）與條件式時序是如何被應用在真實場景中，以確保晶片在各種 PVT 環境下都能達成**「時序收斂」**。
-結語：
-深入理解 .lib 的內部運作機制，不僅能幫助我們在設計流程中更精確地排錯，更是達成高性能、低功耗 IC 設計的基石。
-以上是我的報告
+########################################################################
+# IO PAD CHARACTERIZATION SETUP
+########################################################################
+
+#
+# Pin directions
+#
+
+add_pin PAD -type inout
+add_pin I   -type input
+add_pin C   -type output
+
+add_pin OEN -type input
+add_pin IE  -type input
+add_pin PU  -type input
+add_pin PD  -type input
+
+add_pin VDD    -type power
+add_pin VDDPST -type power
+add_pin POC    -type input
+
+########################################################################
+# FUNCTION DEFINITIONS
+########################################################################
+
+#
+# Receiver path
+#
+# IE=1 -> C follows PAD
+# IE=0 -> C forced low
+#
+
+add_function C {(IE & PAD)}
+
+#
+# Output driver path
+#
+# OEN=0 -> PAD driven by I
+# OEN=1 -> PAD high-Z
+#
+
+add_function PAD {I} -three_state {OEN}
+
+########################################################################
+# OPERATING MODES
+########################################################################
+
+#
+# Output mode
+#
+
+add_mode OUTPUT_MODE {
+    VDD==1 &&
+    VDDPST==1 &&
+    POC==0 &&
+    OEN==0
+}
+
+#
+# Input mode
+#
+
+add_mode INPUT_MODE {
+    VDD==1 &&
+    VDDPST==1 &&
+    POC==0 &&
+    OEN==1 &&
+    IE==1
+}
+
+#
+# Weak pull-up mode
+#
+
+add_mode PULLUP_MODE {
+    VDD==1 &&
+    VDDPST==1 &&
+    POC==0 &&
+    OEN==1 &&
+    PU==1 &&
+    PD==0
+}
+
+#
+# Weak pull-down mode
+#
+
+add_mode PULLDOWN_MODE {
+    VDD==1 &&
+    VDDPST==1 &&
+    POC==0 &&
+    OEN==1 &&
+    PU==0 &&
+    PD==1
+}
+
+#
+# Hi-Z mode
+#
+
+add_mode HIZ_MODE {
+    VDD==1 &&
+    VDDPST==1 &&
+    POC==0 &&
+    OEN==1 &&
+    PU==0 &&
+    PD==0
+}
+
+########################################################################
+# ILLEGAL STATE FILTERING
+########################################################################
+
+#
+# Prevent illegal pull combinations
+#
+
+add_constraint {
+    !(PU==1 && PD==1)
+}
+
+#
+# Prevent characterization during invalid power state
+#
+
+add_constraint {
+    !(VDD==0 && VDDPST==0)
+}
+
+########################################################################
+# TIMING ARC PARTITION
+########################################################################
+
+#
+# Output timing arc
+#
+
+define_arc \
+    -from I \
+    -to PAD \
+    -when "OEN==0"
+
+#
+# Input timing arc
+#
+
+define_arc \
+    -from PAD \
+    -to C \
+    -when "IE==1 && OEN==1"
+
+########################################################################
+# THREE STATE CHARACTERIZATION
+########################################################################
+
+define_arc \
+    -from OEN \
+    -to PAD \
+    -type three_state_disable
+
+define_arc \
+    -from OEN \
+    -to PAD \
+    -type three_state_enable
